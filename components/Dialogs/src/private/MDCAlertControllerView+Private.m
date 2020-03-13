@@ -37,12 +37,14 @@ static const CGFloat MDCDialogMessageOpacity = 0.54f;
 @interface MDCAlertControllerView ()
 
 @property(nonatomic, getter=isVerticalActionsLayout) BOOL verticalActionsLayout;
+
 @property(nonatomic, nullable, strong) UIImageView *titleIconImageView;
 
 @end
 
 @implementation MDCAlertControllerView {
   BOOL _mdc_adjustsFontForContentSizeCategory;
+  BOOL _useCustomTitleIconInsets;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -205,16 +207,11 @@ static const CGFloat MDCDialogMessageOpacity = 0.54f;
 }
 
 - (void)setTitleIcon:(UIImage *)titleIcon {
-  if (titleIcon == nil) {
+  if (titleIcon == nil || self.titleIconView != nil) {
     [self.titleIconImageView removeFromSuperview];
     self.titleIconImageView = nil;
     [self setNeedsLayout];
     return;
-  }
-
-  if (self.titleIconView != nil) {
-    [self.titleIconView removeFromSuperview];
-    self.titleIconView = nil;
   }
 
   if (self.titleIconImageView == nil) {
@@ -238,8 +235,10 @@ static const CGFloat MDCDialogMessageOpacity = 0.54f;
   if (self.titleIconImageView != nil) {
     NSLog(@"Warning: unintended use of the API. The following APIs are not expected to be used"
            "together: 'setTitleIconView:' and `setTitleIcon:` API. Please set either, but not "
-           "both at the same time. If 'titleIcon' is set, 'titleIconView' is ignored.");
-    return;
+           "both at the same time. If 'titleIconView' is set, 'titleIcon' is ignored.");
+    [self.titleIconImageView removeFromSuperview];
+    self.titleIconImageView = nil;
+    [self setNeedsLayout];
   }
   if (_titleIconView == nil || ![_titleIconView isEqual:titleIconView]) {
     if (_titleIconView != nil) {
@@ -249,7 +248,7 @@ static const CGFloat MDCDialogMessageOpacity = 0.54f;
     if (_titleIconView != nil) {
       [self.titleScrollView addSubview:_titleIconView];
     }
-    [self.titleScrollView setNeedsLayout];
+    [self setNeedsLayout];
   }
 }
 
@@ -326,6 +325,11 @@ static const CGFloat MDCDialogMessageOpacity = 0.54f;
   _buttonFont = font;
 
   [self updateButtonFont];
+}
+
+- (void)setTitleIconInsets:(UIEdgeInsets)titleIconInsets {
+  _titleIconInsets = titleIconInsets;
+  _useCustomTitleIconInsets = YES;
 }
 
 - (void)updateButtonFont {
@@ -473,10 +477,10 @@ static const CGFloat MDCDialogMessageOpacity = 0.54f;
 
 - (CGSize)titleIconViewSize {
   CGSize titleIconViewSize = CGSizeZero;
-  if (self.titleIconImageView != nil) {
-    titleIconViewSize = self.titleIconImageView.image.size;
-  } else if (self.titleIconView != nil) {
+  if (self.titleIconView != nil) {
     titleIconViewSize = self.titleIconView.frame.size;
+  } else if (self.titleIconImageView != nil) {
+    titleIconViewSize = self.titleIconImageView.image.size;
   }
   return titleIconViewSize;
 }
@@ -492,13 +496,19 @@ static const CGFloat MDCDialogMessageOpacity = 0.54f;
   return CGRectMake(self.contentInsets.left, 0.0f, messageSize.width, messageSize.height);
 }
 
-- (CGRect)titleIconFrameWithTitleSize:(CGSize)titleSize {
+- (CGRect)titleIconFrameWithTitleSize:(CGSize)titleSize bounds:(CGSize)boundsSize {
   CGSize titleIconViewSize = [self titleIconViewSize];
   CGRect titleFrame = [self titleFrameWithTitleSize:titleSize];
 
+  if (_useCustomTitleIconInsets) {
+    CGFloat width = boundsSize.width - self.titleIconInsets.left - self.titleIconInsets.right;
+    CGFloat height = titleIconViewSize.height * width / titleIconViewSize.width;
+    return CGRectMake(self.titleIconInsets.left, self.titleIconInsets.top, width, height);
+  }
+
+  CGFloat leftInset = 0.0f;
+  CGFloat topInset = 0.0f;
   // match the titleIcon alignment to the title alignment
-  CGFloat leftInset = self.titleIconInsets.left;
-  CGFloat topInset = self.titleIconInsets.top;
   if (self.titleAlignment == NSTextAlignmentCenter) {
     leftInset =
         CGRectGetMinX(titleFrame) + (CGRectGetWidth(titleFrame) - titleIconViewSize.width) / 2.0f;
@@ -661,12 +671,12 @@ static const CGFloat MDCDialogMessageOpacity = 0.54f;
       self.contentInsets.left, CGRectGetMaxY(messageFrame) + [self accessoryVerticalInset],
       accessoryViewSize.width, accessoryViewSize.height);
 
-  CGRect titleIconImageViewRect = [self titleIconFrameWithTitleSize:titleSize];
-  if (self.titleIconImageView != nil) {
+  CGRect titleIconImageViewRect = [self titleIconFrameWithTitleSize:titleSize bounds:boundsSize];
+  if (self.titleIconView != nil) {
+    self.titleIconView.frame = titleIconImageViewRect;
+  } else if (self.titleIconImageView != nil) {
     // Match the title icon alignment to the title alignment.
     self.titleIconImageView.frame = titleIconImageViewRect;
-  } else if (self.titleIconView != nil) {
-    self.titleIconView.frame = titleIconImageViewRect;
   }
 
   self.titleLabel.frame = titleFrame;
